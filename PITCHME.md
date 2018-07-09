@@ -33,18 +33,14 @@
 
 末尾再帰最適化の初歩として、foldRightの末尾再帰にしてみる。
 
-* 修正前
-
 ```scala
+// 修正前
 def foldRight[A, B](l: List[A], z: B)(f: (A, B) => B): B = l match {
   case Nil => z
   case Cons(h, t) => f(h, foldRight(t, z)(f))
 }
-```
 
-* 修正後
-
-```scala
+// 修正後
 def foldRight[A, B](l: List[A], z: B)(f: (A, B) => B): B = {
   foldLeft(reverse(l), z)(flip(f))
 }
@@ -134,6 +130,8 @@ def flatten(list: List[Any]): List[Any] = {
 }
 ```
 
+---
+
 ## 二分木の畳み込み(1)
 
 * FPinScalaのExercise3.29の問題
@@ -150,6 +148,8 @@ def fold[A, B](a: Tree[A])(f: A => B)(g: (B, B) => B): B = a match {
 }
 ```
 
+---
+
 ## 二分木の畳み込み(2)
 
 これを末尾再帰化するにあたっての問題
@@ -159,6 +159,7 @@ def fold[A, B](a: Tree[A])(f: A => B)(g: (B, B) => B): B = a match {
   - 部分木の計算結果
 * これをどのように保持するか...
 
+---
 
 ## 二分木の畳み込み(3)
 
