@@ -1,4 +1,4 @@
-# 末尾再帰最適化とのたたかい
+# 末尾再帰最適化であそぼう
 
 ---
 
@@ -20,7 +20,7 @@
 
 ---
 
-## 末尾再帰最適化を考えはじめたきっかけ
+## きっかけ
 
 * その後、客先でFPinScala読書会がはじまる
 * これも6章までは一度解いているので面白くない
@@ -29,13 +29,7 @@
 
 ---
 
-この発表はどんな感じで遊んできたか、の記録です。
-
-たぶん、まだ知見とか共有できるレベルにない。
-
----
-
-## foldRightの末尾再帰化
+## foldRightの末尾再帰化(1)
 
 末尾再帰最適化の初歩として、foldRightの末尾再帰にしてみる。
 
@@ -58,7 +52,7 @@ def foldRight[A, B](l: List[A], z: B)(f: (A, B) => B): B = {
 
 ---
 
-## `foldRight`の末尾再帰化
+## `foldRight`の末尾再帰化(2)
 
 foldLeftが末尾再帰なおかげでfoldRightも簡単に最適化できる。
 
@@ -92,7 +86,7 @@ res0: List[Any] = List(1, 1, 2, 3, 5, 8)
 
 ---
 
-## `flatten`の末尾再帰化
+## `flatten`の末尾再帰化(1)
 
 リスト要素とネスト方向の二方向に再帰が発生するので末尾再帰化できない><
 
@@ -113,7 +107,80 @@ def flatten(list: List[Any]): List[Any] = {
 
 ---
 
+## flattenの末尾再帰化(2)
+
 じゃあリスト方向とネスト方向で再帰関数をわければいいじゃない
 
 ---
 
+## flattenの末尾再帰化(3)
+
+```scala
+@annotation.tailrec
+def flatten(list: List[Any]): List[Any] = {
+  // もちろん、addとかaddAllは自前で末尾再帰化したコードを用意している
+  @annotation.tailrec
+  def go(acc: List[Any], list: List[Any]): List[Any] = list match {
+    case (l: List[Any]) :: rest => go(addAll(acc, l), rest)
+    case e :: rest              => go(add(acc, e), rest)
+    case Nil                    => acc
+  }
+
+  if (forall(list, (e => !e.isInstanceOf[List[Any]]): Any => Boolean)) {
+    list
+  } else {
+    flatten(go(Nil, list))
+  }
+}
+```
+
+## 二分木の畳み込み(1)
+
+* FPinScalaのExercise3.29の問題
+* 末尾再帰化処理はこんな感じ
+
+```scala
+sealed trait Tree[+A]
+case class Leaf[A](value: A) extends Tree[A]
+case class Branch[A](left: Tree[A], right: Tree[A]) extends Tree[A]
+
+def fold[A, B](a: Tree[A])(f: A => B)(g: (B, B) => B): B = a match {
+  case Branch(l, r) => g(fold(l)(f)(g), fold(r)(f)(g))
+  case Leaf(v)      => f(v)
+}
+```
+
+## 二分木の畳み込み(2)
+
+これを末尾再帰化するにあたっての問題
+
+* 次の再帰に持っていきたいデータが二つある
+  - 未捜査のツリー
+  - 部分木の計算結果
+* これをどのように保持するか...
+
+
+## 二分木の畳み込み(3)
+
+```scala
+def fold[A, B](tree: Tree[A])(f: A => B)(g: (B, B) => B): B = {
+  @annotation.tailrec
+  def eval(stack: List[Either[B, Tree[A]]]): List[Either[B, Tree[A]]] = stack match {
+    case Cons(Left(e1), Cons(Left(e2), rest))   => eval(Cons(Left(g(e2, e1)), rest))
+    case Cons(Left(e1), Cons(r@Right(_), rest)) => Cons(r, Cons(Left(e1), rest)) // 呼出元で木を取り出しやすいよう入れ替え
+    case _                                      => stack
+  }
+  @annotation.tailrec
+  def go(tree: Tree[A], stack: List[Either[B, Tree[A]]]): B = tree match {
+    case Leaf(v) =>
+      // 計算済みの値がstackに連続して溜まると未計算の木が取り出せないので出来るだけ計算を進める
+      eval(Cons(Left(f(v)), stack)) match {
+        case Cons(Right(next), rest) => go(next, rest)
+        case Cons(Left(e1), _)       => e1 // 最後まで評価が終わっているはず
+        case Nil                     => f(v)
+      }
+    case Branch(l, r) => go(l, Cons(Right(r), stack))
+  }
+  go(tree, Nil)
+}
+```
