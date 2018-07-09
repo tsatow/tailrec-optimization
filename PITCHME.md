@@ -1,4 +1,4 @@
-# 末尾再帰最適化とのたたかいの記録
+# 末尾再帰最適化とのたたかい
 
 ---
 
@@ -13,20 +13,100 @@
 
 ## 末尾再帰最適化を考えはじめたきっかけ
 
-昨年12/31にS99を解いていたが、S20くらいまでは難易度が低くて面白くないので、
-とりあえず末尾再帰最適化されるようにやってみよう思った。
+* 昨年大晦日にS99を解いていた。
+* P20くらいまでは難易度が低くて面白くない。
+
+=> とりあえず`@annotation.tailrec`付けてあそぼう！
 
 ---
 
 ## 末尾再帰最適化を考えはじめたきっかけ
 
-また、その後お客さん先でFPinScalaを全問解いていく読書会が始まったが、
-ここでも6章までは一通り解いていたのでとにかく`@annotation.tailrec`を付けて遊んでいた。
+* その後、客先でFPinScala読書会がはじまった。
+* これも6章までは一度解いているので面白くない。
+
+=> とりあえず`@annotation.tailrec`付けてあそぼう！
 
 ---
 
-## この発表はどんな感じで遊んできたか、の記録です
-
+この発表はどんな感じで遊んできたか、の記録です
 たぶん、まだ知見とか共有できるレベルにない。
 
 ---
+
+## foldRightの末尾再帰化
+
+末尾再帰最適化の初歩として、foldRightの末尾再帰にしてみる。
+
+* 修正前
+
+```scala
+def foldRight[A, B](l: List[A], z: B)(f: (A, B) => B): B = l match {
+  case Nil => z
+  case Cons(h, t) => f(h, foldRight(t, z)(f))
+}
+```
+
+* 修正後
+
+```scala
+def foldRight[A, B](l: List[A], z: B)(f: (A, B) => B): B = {
+  foldLeft(reverse(l), z)(flip(f))
+}
+```
+
+---
+
+## foldRightの末尾再帰化
+
+foldLeftが末尾再帰なおかげでfoldRightも簡単に最適化できる。
+
+```scala
+def flip[A, B](f: (A, B) => B): (B, A) => B = (b, a) => f(a, b)
+
+def reverse[A](as: List[A]): List[A] = {
+  foldLeft(as, Nil: List[A])((b, a) => Cons(a, b))
+}
+
+@annotation.tailrec
+def foldLeft[A, B](l: List[A], z: B)(f: (B, A) => B): B = l match {
+  case Nil => z
+  case Cons(h, t) => foldLeft(t, f(z, h))(f)
+}
+```
+
+---
+
+## flattenの末尾再帰化
+
+* S99のP07より。
+* 普通のflattenと違いリストのネスト具合が一意ではない。
+
+```
+P07 (**) Flatten a nested list structure.
+Example:
+scala> flatten(List(List(1, 1), 2, List(3, List(5, 8))))
+res0: List[Any] = List(1, 1, 2, 3, 5, 8)
+```
+
+---
+
+## flattenの末尾再帰化
+
+* リスト要素方向とネスト方向の二方向に再帰が発生するので末尾再帰化できない
+
+```scala
+def flatten(list: List[Any]): List[Any] = {
+  // 末尾再帰にできぬ...できぬのだ!!
+  def go(acc: List[Any], maybeList: Any): List[Any] = maybeList match {
+    // Listの場合
+    case e :: rest => go(go(acc, e), rest)
+    case Nil       => acc
+    // それ以外
+    case e         => e :: acc
+  }
+
+  P05.reverse(go(Nil, list)) // P05では末尾再帰のreverseを定義している
+}
+```
+
